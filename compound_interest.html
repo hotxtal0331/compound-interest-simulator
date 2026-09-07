@@ -1,0 +1,1082 @@
+<title>資産運用シミュレーション</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* 元本: blue */
+    --series-2:       #008300; /* 複利利益: green */
+    --series-1-fill:  rgba(42,120,214,0.28);
+    --series-2-fill:  rgba(0,131,0,0.24);
+    --expense-color:  #c0392b;
+    --tooltip-bg:     #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #008300;
+      --series-1-fill:  rgba(57,135,229,0.30);
+      --series-2-fill:  rgba(0,131,0,0.28);
+      --expense-color:  #e0685c;
+      --tooltip-bg:     #242422;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #008300;
+    --series-1-fill:  rgba(57,135,229,0.30);
+    --series-2-fill:  rgba(0,131,0,0.28);
+    --expense-color:  #e0685c;
+    --tooltip-bg:     #242422;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .viz-root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    padding: 24px 16px 48px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.35rem; font-weight: 700; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 0.88rem; margin: 0 0 20px; }
+
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 0.95rem; font-weight: 700; margin: 0 0 14px; }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .field .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: var(--page);
+  }
+  .field .input-row span.prefix { color: var(--text-muted); font-size: 0.85rem; }
+  .field input[type="number"] {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    width: 100%;
+    outline: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .field input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--series-1); }
+  .field .rangeval { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+  .note {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    margin-top: 14px;
+    line-height: 1.5;
+  }
+
+  .stage-block { margin-top: 18px; }
+  .stage-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .stage-block-header h3 { font-size: 0.85rem; font-weight: 700; margin: 0; }
+  .stage-add {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    flex: none;
+  }
+  .stage-add:hover { background: var(--page); }
+  .stage-list { display: flex; flex-direction: column; gap: 10px; }
+  .stage-row {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--page);
+  }
+  .stage-row-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stage-row-label .stage-age-range { font-weight: 400; color: var(--text-muted); font-size: 0.74rem; }
+  .stage-row-label .stage-warn { font-weight: 600; color: var(--expense-color); font-size: 0.74rem; }
+  .stage-row-fields { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .stage-row-fields .field { flex: 1 1 140px; min-width: 140px; margin-bottom: 0; }
+  .stage-remove {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stage-remove:hover:not(:disabled) { color: #c0392b; border-color: #c0392b; }
+  .stage-remove:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .stat {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .stat .label { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat.principal .value { color: var(--series-1); }
+  .stat.interest .value { color: var(--series-2); }
+  .stat .sub { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+
+  .legend { display: flex; gap: 18px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--text-secondary); }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .swatch.line { width: 16px; height: 2px; border-radius: 1px; }
+  .swatch.line.dashed {
+    background: repeating-linear-gradient(to right, var(--text-primary) 0 4px, transparent 4px 7px);
+  }
+  .swatch.line.dotted {
+    background: repeating-linear-gradient(to right, var(--text-muted) 0 2px, transparent 2px 5px);
+  }
+
+  .chart-wrap { position: relative; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .axis-label { fill: var(--text-muted); font-size: 10.5px; }
+  .total-line { fill: none; stroke: var(--text-primary); stroke-width: 2; }
+  .total-line-withdraw { fill: none; stroke: var(--text-primary); stroke-width: 2; stroke-dasharray: 5 4; }
+  .reference-line { fill: none; stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 2 3; }
+  .phase-marker { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .phase-label { fill: var(--text-secondary); font-size: 10.5px; }
+  .hover-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; }
+  .hover-dot { fill: var(--surface-1); stroke-width: 2; opacity: 0; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--tooltip-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.76rem;
+    color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    opacity: 0;
+    transition: opacity 0.08s ease;
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .tooltip .t-title { font-weight: 700; margin-bottom: 4px; color: var(--text-primary); }
+  .tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+  .tooltip .t-row .k { color: var(--text-secondary); }
+  .tooltip .t-row.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; font-weight: 700; }
+
+  .table-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .table-toggle:hover { background: var(--page); }
+
+  .table-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: none;
+  }
+  .table-scroll.open { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead th {
+    position: sticky; top: 0;
+    background: var(--surface-1);
+    text-align: right;
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  thead th:first-child, tbody td:first-child { text-align: left; }
+  tbody td {
+    text-align: right;
+    padding: 6px 12px;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--grid);
+  }
+  tbody tr.year-end { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+  tbody tr.year-end td { font-weight: 700; }
+  tbody tr.withdraw-row { background: color-mix(in srgb, var(--text-muted) 8%, transparent); }
+  tbody tr.withdraw-row.year-end { background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
+  tbody tr.expense-row { box-shadow: inset 3px 0 0 0 var(--expense-color); }
+  tbody tr.expense-row td:nth-child(5) { color: var(--expense-color); font-weight: 700; }
+
+  footer.credit { text-align: center; color: var(--text-muted); font-size: 0.7rem; margin-top: 20px; }
+</style>
+
+<div class="viz-root" data-palette="#2a78d6,#008300">
+  <div class="wrap">
+    <h1>資産運用シミュレーション</h1>
+    <p class="subtitle">毎月一定額を積み立てた場合の元本と複利利益の推移（日本円建て）</p>
+
+    <div class="panel">
+      <h2>条件設定</h2>
+      <div class="controls">
+        <div class="field">
+          <label for="initial">初期資金</label>
+          <div class="input-row">
+            <span class="prefix">¥</span>
+            <input type="number" id="initial" value="0" min="0" step="10000">
+          </div>
+        </div>
+        <div class="field">
+          <label for="rate">年利率（複利）</label>
+          <div class="input-row">
+            <input type="number" id="rate" value="4" min="0" max="50" step="0.1">
+            <span class="prefix">%</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="currentAge">現在の年齢</label>
+          <div class="input-row">
+            <input type="number" id="currentAge" value="60" min="0" max="94" step="1">
+            <span class="prefix">歳</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-block">
+        <div class="stage-block-header">
+          <h3>積立ステージ（生活スタイルに応じて積立額を変更）</h3>
+          <button type="button" class="stage-add" id="addStage">+ ステージを追加</button>
+        </div>
+        <div class="stage-list" id="stageList"></div>
+      </div>
+
+      <p class="note">
+        計算方法: 初期資金を起点に、毎月末の残高に月利（年利÷12）を複利で適用したのち、当月分の積立額を加算します。
+        積立額はステージごとに異なる金額・期間を設定でき、ステージ1から順番に適用されます。
+        税金・手数料・インフレは考慮していない単純モデルです。「現在の年齢」はグラフの年齢軸と取り崩し試算の起点に使用します。
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>取り崩し設定</h2>
+      <div class="controls">
+        <div class="field">
+          <label for="withdraw">毎月の取り崩し額</label>
+          <div class="input-row">
+            <span class="prefix">¥</span>
+            <input type="number" id="withdraw" value="100000" min="0" step="1000">
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        計算方法: 積立期間終了後も同じ年利率で複利運用を続けながら、毎月末に指定額を取り崩します。
+        資産残高が0円になった時点、または95歳に達した時点で推移の表示を終了します。
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>想定外の支出</h2>
+      <div class="stage-block" style="margin-top:0;">
+        <div class="stage-block-header">
+          <h3>一時的な出費（車の購入・修繕費・医療費など）</h3>
+          <button type="button" class="stage-add" id="addExpense">+ 支出を追加</button>
+        </div>
+        <div class="stage-list" id="expenseList"></div>
+      </div>
+      <p class="note" id="expenseNote">
+        指定した年齢になった月に、資産残高から一時的に金額を差し引きます。積立期間・取り崩し期間のどちらでも指定できます。
+      </p>
+    </div>
+
+    <div class="stats">
+      <div class="stat principal">
+        <div class="label">積立元本の合計</div>
+        <div class="value" id="statPrincipal">¥0</div>
+        <div class="sub" id="statPrincipalSub"></div>
+      </div>
+      <div class="stat interest">
+        <div class="label">複利による利益</div>
+        <div class="value" id="statInterest">¥0</div>
+        <div class="sub" id="statInterestSub"></div>
+      </div>
+      <div class="stat">
+        <div class="label">積立終了時点の残高</div>
+        <div class="value" id="statTotal">¥0</div>
+        <div class="sub" id="statTotalSub"></div>
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:12px;">
+      <div class="stat">
+        <div class="label">資産の推移（取り崩し後）</div>
+        <div class="value" id="statDepletion">¥0</div>
+        <div class="sub" id="statDepletionSub"></div>
+      </div>
+      <div class="stat">
+        <div class="label">累計取り崩し額</div>
+        <div class="value" id="statWithdrawTotal">¥0</div>
+        <div class="sub" id="statWithdrawTotalSub"></div>
+      </div>
+      <div class="stat">
+        <div class="label">参考: 運用せず取り崩した場合</div>
+        <div class="value" id="statReference">¥0</div>
+        <div class="sub" id="statReferenceSub"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="legend">
+        <div class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>積立元本（残存分）</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>複利利益</div>
+        <div class="legend-item"><span class="swatch line" style="background:var(--text-primary)"></span>資産残高（積立期）</div>
+        <div class="legend-item"><span class="swatch line dashed" style="background:var(--text-primary)"></span>資産残高（取り崩し期）</div>
+        <div class="legend-item"><span class="swatch line dotted" style="background:var(--text-muted)"></span>参考: 運用せず取り崩した場合</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--expense-color); border-radius:50%;"></span>想定外の支出</div>
+      </div>
+      <div class="chart-wrap" id="chartWrap">
+        <svg id="chart" viewBox="0 0 860 380" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h2 style="margin:0;">月別データ（積立〜取り崩しの推移）</h2>
+        <button class="table-toggle" id="toggleTable">表を表示</button>
+      </div>
+      <div class="table-scroll" id="tableScroll">
+        <table>
+          <thead>
+            <tr>
+              <th>年齢 / 経過</th>
+              <th>積立元本（残存分）</th>
+              <th>複利利益</th>
+              <th>取り崩し額</th>
+              <th>臨時支出</th>
+              <th>資産残高</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer class="credit">単純化した複利計算シミュレーションです。実際の運用成果を保証するものではありません。</footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $initial = document.getElementById('initial');
+  const $rate = document.getElementById('rate');
+  const $currentAge = document.getElementById('currentAge');
+  const $withdraw = document.getElementById('withdraw');
+  const $stageList = document.getElementById('stageList');
+  const $addStage = document.getElementById('addStage');
+  const $expenseList = document.getElementById('expenseList');
+  const $addExpense = document.getElementById('addExpense');
+  const $toggleTable = document.getElementById('toggleTable');
+  const $tableScroll = document.getElementById('tableScroll');
+  const $tableBody = document.getElementById('tableBody');
+  const $tooltip = document.getElementById('tooltip');
+  const $chartWrap = document.getElementById('chartWrap');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('chart');
+
+  const fmtJPY = (n) => n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
+  const fmtCompact = (n) => {
+    if (n >= 100000000) return '¥' + (n / 100000000).toFixed(n >= 1000000000 ? 0 : 1) + '億';
+    if (n >= 10000) return '¥' + (n / 10000).toFixed(n >= 1000000 ? 0 : 1) + '万';
+    return '¥' + Math.round(n).toLocaleString('ja-JP');
+  };
+
+  const MAX_AGE = 95;
+
+  function computeFullSeries(initial, stages, annualRatePct, currentAge, withdraw, expenses) {
+    const monthlyRate = (annualRatePct / 100) / 12;
+    const totalMonthsTo95 = Math.max(0, Math.round((MAX_AGE - currentAge) * 12));
+    const stageMonthsTotal = stages.reduce((s, st) => s + st.years * 12, 0);
+    const accumMonths = Math.min(stageMonthsTotal, totalMonthsTo95);
+    const clamped = stageMonthsTotal > totalMonthsTo95;
+    const withdrawMonthsPlanned = totalMonthsTo95 - accumMonths;
+    const totalMonths = accumMonths + withdrawMonthsPlanned;
+
+    // flatten stages into a per-month contribution lookup (only covers m in [1, accumMonths])
+    const stageContribForMonth = [];
+    {
+      let idx = 0;
+      outer:
+      for (const stage of stages) {
+        for (let i = 0; i < stage.years * 12; i++) {
+          if (idx >= accumMonths) break outer;
+          idx++;
+          stageContribForMonth[idx] = stage.contrib;
+        }
+      }
+    }
+
+    // aggregate one-time expenses into the month they land on
+    const expenseForMonth = new Map();
+    (expenses || []).forEach((exp) => {
+      const monthIdx = Math.round((exp.age - currentAge) * 12);
+      if (monthIdx >= 0 && monthIdx <= totalMonths) {
+        expenseForMonth.set(monthIdx, (expenseForMonth.get(monthIdx) || 0) + exp.amount);
+      }
+    });
+
+    let balance = initial;
+    let contributed = initial;
+    const startExpense = expenseForMonth.get(0) || 0;
+    if (startExpense) balance = Math.max(0, balance - startExpense);
+    const data = [{ month: 0, phase: 'accum', age: currentAge, year: 0, principal: Math.min(contributed, balance), interest: Math.max(0, balance - contributed), total: balance, withdraw: 0, withdrawCum: 0, expense: startExpense }];
+
+    let withdrawCum = 0;
+    let depletedAtMonth = null;
+    const appliedExpenses = startExpense ? [{ month: 0, age: currentAge, amount: startExpense }] : [];
+
+    for (let m = 1; m <= totalMonths; m++) {
+      const isAccum = m <= accumMonths;
+      balance = balance * (1 + monthlyRate);
+      if (isAccum) {
+        const c = stageContribForMonth[m] || 0;
+        balance += c;
+        contributed += c;
+      } else {
+        balance -= withdraw;
+        withdrawCum += withdraw;
+      }
+      const exp = expenseForMonth.get(m) || 0;
+      if (exp) {
+        balance -= exp;
+        appliedExpenses.push({ month: m, age: currentAge + m / 12, amount: exp });
+      }
+      if (balance < 0) balance = 0;
+
+      const principal = Math.min(contributed, balance);
+      const interest = Math.max(0, balance - contributed);
+      data.push({
+        month: m,
+        phase: isAccum ? 'accum' : 'withdraw',
+        age: currentAge + m / 12,
+        year: Math.ceil(m / 12),
+        principal, interest, total: balance,
+        withdraw: isAccum ? 0 : withdraw,
+        withdrawCum: isAccum ? 0 : withdrawCum,
+        expense: exp,
+      });
+      if (!isAccum && balance <= 0) { depletedAtMonth = m; break; }
+    }
+
+    // reference series: same starting balance and expenses, but withdrawn with no investment growth
+    const refStart = data[accumMonths].total;
+    const referenceData = [{ month: accumMonths, age: currentAge + accumMonths / 12, total: refStart }];
+    let referenceDepletedAtMonth = null;
+    let balanceRef = refStart;
+    for (let m = accumMonths + 1; m <= totalMonths; m++) {
+      balanceRef -= withdraw;
+      const exp = expenseForMonth.get(m) || 0;
+      if (exp) balanceRef -= exp;
+      if (balanceRef < 0) balanceRef = 0;
+      referenceData.push({ month: m, age: currentAge + m / 12, total: balanceRef });
+      if (balanceRef <= 0) { referenceDepletedAtMonth = m; break; }
+    }
+
+    return { data, accumMonths, clamped, depletedAtMonth, withdrawMonthsPlanned, finalWithdrawCum: withdrawCum, appliedExpenses, referenceData, referenceDepletedAtMonth };
+  }
+
+  function ageParts(age) {
+    const totalM = Math.round(age * 12);
+    return { y: Math.floor(totalM / 12), m: totalM % 12 };
+  }
+
+  function stageSummaryText(stages, accumMonths, clamped) {
+    const parts = [];
+    let used = 0;
+    for (let i = 0; i < stages.length; i++) {
+      const remaining = accumMonths - used;
+      if (remaining <= 0) break;
+      const appliedMonths = Math.min(stages[i].years * 12, remaining);
+      parts.push(`ステージ${i + 1} ${fmtJPY(stages[i].contrib)}×${appliedMonths}ヶ月`);
+      used += stages[i].years * 12;
+    }
+    let text = parts.join(' + ') || '積立なし';
+    if (clamped) text += `（${MAX_AGE}歳到達のため一部未反映）`;
+    return text;
+  }
+
+  function renderStats(data, initial, stages, meta, currentAge) {
+    const accumEnd = data[meta.accumMonths];
+    const stageText = stageSummaryText(stages, meta.accumMonths, meta.clamped);
+    document.getElementById('statPrincipal').textContent = fmtJPY(accumEnd.principal);
+    document.getElementById('statPrincipalSub').textContent = initial > 0
+      ? `初期資金 ${fmtJPY(initial)} + ${stageText}`
+      : stageText;
+    document.getElementById('statInterest').textContent = fmtJPY(accumEnd.interest);
+    document.getElementById('statInterestSub').textContent = accumEnd.principal > 0
+      ? `元本比 +${((accumEnd.interest / accumEnd.principal) * 100).toFixed(1)}%`
+      : '';
+    document.getElementById('statTotal').textContent = fmtJPY(accumEnd.total);
+    const endAge = ageParts(accumEnd.age);
+    document.getElementById('statTotalSub').textContent = `${endAge.y}歳${endAge.m}ヶ月時点（積立終了）`;
+
+    const $depletion = document.getElementById('statDepletion');
+    const $depletionSub = document.getElementById('statDepletionSub');
+    if (meta.depletedAtMonth != null) {
+      const dep = data[data.length - 1];
+      const a = ageParts(dep.age);
+      $depletion.textContent = `${a.y}歳${a.m}ヶ月`;
+      $depletionSub.textContent = '資産残高が0円になる時期';
+    } else if (meta.withdrawMonthsPlanned > 0) {
+      const last = data[data.length - 1];
+      $depletion.textContent = fmtJPY(Math.round(last.total));
+      $depletionSub.textContent = `${MAX_AGE}歳時点の残高（枯渇せず）`;
+    } else {
+      $depletion.textContent = '—';
+      $depletionSub.textContent = meta.clamped ? `${MAX_AGE}歳到達のため取り崩し期間なし` : '取り崩し期間なし';
+    }
+    document.getElementById('statWithdrawTotal').textContent = fmtJPY(Math.round(meta.finalWithdrawCum));
+    document.getElementById('statWithdrawTotalSub').textContent = '取り崩し期間中の合計取り崩し額';
+
+    const $reference = document.getElementById('statReference');
+    const $referenceSub = document.getElementById('statReferenceSub');
+    if (meta.withdrawMonthsPlanned <= 0) {
+      $reference.textContent = '—';
+      $referenceSub.textContent = '取り崩し期間なし';
+    } else if (meta.referenceDepletedAtMonth != null) {
+      const refDep = meta.referenceData[meta.referenceData.length - 1];
+      const a = ageParts(refDep.age);
+      $reference.textContent = `${a.y}歳${a.m}ヶ月`;
+      $referenceSub.textContent = '運用せず取り崩した場合に0円になる時期';
+    } else {
+      const refLast = meta.referenceData[meta.referenceData.length - 1];
+      $reference.textContent = fmtJPY(Math.round(refLast.total));
+      $referenceSub.textContent = `${MAX_AGE}歳時点の残高（運用せず・枯渇せず）`;
+    }
+  }
+
+  function renderTable(data, meta) {
+    $tableBody.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    data.forEach((d) => {
+      const tr = document.createElement('tr');
+      const a = ageParts(d.age);
+      const ageStr = `${a.y}歳${a.m}ヶ月`;
+      const isWithdraw = d.phase === 'withdraw';
+      if (isWithdraw) tr.classList.add('withdraw-row');
+      if (d.expense > 0) tr.classList.add('expense-row');
+      const withdrawCell = isWithdraw ? fmtJPY(Math.round(d.withdraw)) : '—';
+      const expenseCell = d.expense > 0 ? '−' + fmtJPY(Math.round(d.expense)) : '—';
+
+      if (d.month === 0) {
+        tr.innerHTML = `<td>開始時点（${ageStr}）</td><td>${fmtJPY(Math.round(d.principal))}</td><td>${fmtJPY(Math.round(d.interest))}</td><td>—</td><td>${expenseCell}</td><td>${fmtJPY(Math.round(d.total))}</td>`;
+        frag.appendChild(tr);
+        return;
+      }
+      const monthInPhase = isWithdraw ? d.month - meta.accumMonths : d.month;
+      const isYearEnd = monthInPhase % 12 === 0 || d.total <= 0;
+      if (isYearEnd) tr.classList.add('year-end');
+      const prefix = isWithdraw ? '[取り崩し] ' : '';
+      const label = isYearEnd
+        ? `${prefix}${d.year}年目末（${ageStr}）`
+        : `${prefix}${d.year}年目 ${((d.month - 1) % 12) + 1}月目（${ageStr}）`;
+      tr.innerHTML = `<td>${label}</td><td>${fmtJPY(Math.round(d.principal))}</td><td>${fmtJPY(Math.round(d.interest))}</td><td>${withdrawCell}</td><td>${expenseCell}</td><td>${fmtJPY(Math.round(d.total))}</td>`;
+      frag.appendChild(tr);
+    });
+    $tableBody.appendChild(frag);
+  }
+
+  function niceStep(maxVal) {
+    const rough = maxVal / 5;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const norm = rough / mag;
+    let step;
+    if (norm < 1.5) step = 1 * mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
+    return step;
+  }
+
+  let currentData = [];
+  let currentMeta = null;
+
+  function renderChart(data, meta) {
+    currentData = data;
+    currentMeta = meta;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const W = 860, H = 380;
+    const margin = { top: 16, right: 18, bottom: 34, left: 64 };
+    const plotW = W - margin.left - margin.right;
+    const plotH = H - margin.top - margin.bottom;
+
+    const maxTotal = data.reduce((mx, d) => Math.max(mx, d.total), 0);
+    const step = niceStep(maxTotal || 1);
+    const yMax = Math.ceil(maxTotal / step) * step + step;
+    const n = data.length;
+
+    const x = (i) => margin.left + (i / (n - 1)) * plotW;
+    const y = (v) => margin.top + plotH - (v / yMax) * plotH;
+
+    // gridlines + y axis labels
+    const gridCount = Math.round(yMax / step);
+    for (let g = 0; g <= gridCount; g++) {
+      const v = g * step;
+      const gy = y(v);
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', margin.left);
+      line.setAttribute('x2', W - margin.right);
+      line.setAttribute('y1', gy);
+      line.setAttribute('y2', gy);
+      line.setAttribute('class', g === 0 ? 'baseline' : 'gridline');
+      svg.appendChild(line);
+
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', margin.left - 8);
+      label.setAttribute('y', gy + 3);
+      label.setAttribute('text-anchor', 'end');
+      label.setAttribute('class', 'axis-label');
+      label.textContent = fmtCompact(v);
+      svg.appendChild(label);
+    }
+
+    // x axis ticks (age)
+    const startAge = data[0].age;
+    const endAge = data[n - 1].age;
+    const ageSpan = endAge - startAge;
+    const ageTickEvery = ageSpan <= 10 ? 1 : ageSpan <= 20 ? 2 : ageSpan <= 40 ? 5 : 10;
+    const firstTickAge = Math.ceil(startAge / ageTickEvery) * ageTickEvery;
+    for (let age = firstTickAge; age <= endAge; age += ageTickEvery) {
+      const idx = Math.round((age - startAge) * 12);
+      if (idx < 0 || idx >= n) continue;
+      const gx = x(idx);
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', gx);
+      label.setAttribute('y', H - margin.bottom + 18);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('class', 'axis-label');
+      label.textContent = age + '歳';
+      svg.appendChild(label);
+    }
+
+    // build stacked area paths: principal (bottom), interest (stacked on top)
+    let principalTop = 'M ' + x(0) + ' ' + y(0);
+    let principalBottom = 'L ' + x(n - 1) + ' ' + y(0) + ' L ' + x(0) + ' ' + y(0) + ' Z';
+    let dPrincipal = 'M ' + x(0) + ' ' + y(0) + ' ';
+    data.forEach((d, i) => { dPrincipal += 'L ' + x(i) + ' ' + y(d.principal) + ' '; });
+    dPrincipal += 'L ' + x(n - 1) + ' ' + y(0) + ' Z';
+
+    let dInterest = 'M ' + x(0) + ' ' + y(data[0].principal) + ' ';
+    data.forEach((d, i) => { dInterest += 'L ' + x(i) + ' ' + y(d.principal + d.interest) + ' '; });
+    for (let i = n - 1; i >= 0; i--) { dInterest += 'L ' + x(i) + ' ' + y(data[i].principal) + ' '; }
+    dInterest += 'Z';
+
+    const accumIdx = meta.accumMonths;
+    let dTotalAccum = '';
+    for (let i = 0; i <= Math.min(accumIdx, n - 1); i++) {
+      dTotalAccum += (i === 0 ? 'M ' : 'L ') + x(i) + ' ' + y(data[i].total) + ' ';
+    }
+    let dTotalWithdraw = '';
+    for (let i = accumIdx; i < n; i++) {
+      dTotalWithdraw += (i === accumIdx ? 'M ' : 'L ') + x(i) + ' ' + y(data[i].total) + ' ';
+    }
+
+    const pathPrincipal = document.createElementNS(svgNS, 'path');
+    pathPrincipal.setAttribute('d', dPrincipal);
+    pathPrincipal.setAttribute('fill', 'var(--series-1-fill)');
+    svg.appendChild(pathPrincipal);
+
+    const pathInterest = document.createElementNS(svgNS, 'path');
+    pathInterest.setAttribute('d', dInterest);
+    pathInterest.setAttribute('fill', 'var(--series-2-fill)');
+    svg.appendChild(pathInterest);
+
+    const pathTotalAccum = document.createElementNS(svgNS, 'path');
+    pathTotalAccum.setAttribute('d', dTotalAccum);
+    pathTotalAccum.setAttribute('class', 'total-line');
+    svg.appendChild(pathTotalAccum);
+
+    if (accumIdx < n - 1) {
+      const pathTotalWithdraw = document.createElementNS(svgNS, 'path');
+      pathTotalWithdraw.setAttribute('d', dTotalWithdraw);
+      pathTotalWithdraw.setAttribute('class', 'total-line-withdraw');
+      svg.appendChild(pathTotalWithdraw);
+
+      const bx = x(accumIdx);
+      const marker = document.createElementNS(svgNS, 'line');
+      marker.setAttribute('x1', bx);
+      marker.setAttribute('x2', bx);
+      marker.setAttribute('y1', margin.top);
+      marker.setAttribute('y2', margin.top + plotH);
+      marker.setAttribute('class', 'phase-marker');
+      svg.appendChild(marker);
+
+      const markerLabel = document.createElementNS(svgNS, 'text');
+      markerLabel.setAttribute('x', bx + 4);
+      markerLabel.setAttribute('y', margin.top + 12);
+      markerLabel.setAttribute('class', 'phase-label');
+      markerLabel.textContent = '取り崩し開始';
+      svg.appendChild(markerLabel);
+    }
+
+    // reference line: withdrawing with no investment growth
+    const referenceByMonth = new Map();
+    if (meta.referenceData && meta.referenceData.length > 1) {
+      let dRef = '';
+      meta.referenceData.forEach((r, i) => {
+        referenceByMonth.set(r.month, r);
+        const idx = Math.min(n - 1, r.month);
+        dRef += (i === 0 ? 'M ' : 'L ') + x(idx) + ' ' + y(r.total) + ' ';
+      });
+      const pathRef = document.createElementNS(svgNS, 'path');
+      pathRef.setAttribute('d', dRef);
+      pathRef.setAttribute('class', 'reference-line');
+      svg.appendChild(pathRef);
+    }
+
+    // expense markers
+    (meta.appliedExpenses || []).forEach((exp) => {
+      const idx = Math.min(n - 1, exp.month);
+      const ex = x(idx);
+      const ey = y(data[idx].total);
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('cx', ex);
+      dot.setAttribute('cy', ey);
+      dot.setAttribute('r', 4);
+      dot.setAttribute('fill', 'var(--expense-color)');
+      dot.setAttribute('stroke', 'var(--surface-1)');
+      dot.setAttribute('stroke-width', 1.5);
+      svg.appendChild(dot);
+    });
+
+    // hover elements
+    const hoverLine = document.createElementNS(svgNS, 'line');
+    hoverLine.setAttribute('y1', margin.top);
+    hoverLine.setAttribute('y2', margin.top + plotH);
+    hoverLine.setAttribute('class', 'hover-line');
+    svg.appendChild(hoverLine);
+
+    const dotPrincipal = document.createElementNS(svgNS, 'circle');
+    dotPrincipal.setAttribute('r', 4);
+    dotPrincipal.setAttribute('stroke', 'var(--series-1)');
+    dotPrincipal.setAttribute('class', 'hover-dot');
+    svg.appendChild(dotPrincipal);
+
+    const dotTotal = document.createElementNS(svgNS, 'circle');
+    dotTotal.setAttribute('r', 4);
+    dotTotal.setAttribute('stroke', 'var(--text-primary)');
+    dotTotal.setAttribute('class', 'hover-dot');
+    svg.appendChild(dotTotal);
+
+    const overlay = document.createElementNS(svgNS, 'rect');
+    overlay.setAttribute('x', margin.left);
+    overlay.setAttribute('y', margin.top);
+    overlay.setAttribute('width', plotW);
+    overlay.setAttribute('height', plotH);
+    overlay.setAttribute('fill', 'transparent');
+    svg.appendChild(overlay);
+
+    function showAt(i) {
+      const d = data[i];
+      hoverLine.setAttribute('x1', x(i));
+      hoverLine.setAttribute('x2', x(i));
+      hoverLine.style.opacity = 1;
+      dotPrincipal.setAttribute('cx', x(i));
+      dotPrincipal.setAttribute('cy', y(d.principal));
+      dotPrincipal.style.opacity = 1;
+      dotTotal.setAttribute('cx', x(i));
+      dotTotal.setAttribute('cy', y(d.total));
+      dotTotal.style.opacity = 1;
+
+      const a = ageParts(d.age);
+      const ageStr = `${a.y}歳${a.m}ヶ月`;
+      const titleLabel = d.month === 0
+        ? `開始時点（${ageStr}）`
+        : d.phase === 'withdraw'
+          ? `取り崩し ${d.month - accumIdx}ヶ月目（${ageStr}）`
+          : `${d.year}年目 ${((d.month - 1) % 12) + 1}月目（${ageStr}）`;
+      const withdrawRow = d.phase === 'withdraw'
+        ? `<div class="t-row"><span class="k">その月の取り崩し</span><span>${fmtJPY(Math.round(d.withdraw))}</span></div>
+           <div class="t-row"><span class="k">累計取り崩し額</span><span>${fmtJPY(Math.round(d.withdrawCum))}</span></div>`
+        : '';
+      const expenseRow = d.expense > 0
+        ? `<div class="t-row"><span class="k">想定外の支出</span><span>−${fmtJPY(Math.round(d.expense))}</span></div>`
+        : '';
+      const ref = referenceByMonth.get(d.month);
+      const referenceRow = ref
+        ? `<div class="t-row"><span class="k">参考（運用なし）</span><span>${fmtJPY(Math.round(ref.total))}</span></div>`
+        : '';
+      $tooltip.innerHTML = `
+        <div class="t-title">${titleLabel}</div>
+        <div class="t-row"><span class="k">積立元本（残存分）</span><span>${fmtJPY(Math.round(d.principal))}</span></div>
+        <div class="t-row"><span class="k">複利利益</span><span>${fmtJPY(Math.round(d.interest))}</span></div>
+        ${withdrawRow}
+        ${expenseRow}
+        <div class="t-row total"><span class="k">資産残高</span><span>${fmtJPY(Math.round(d.total))}</span></div>
+        ${referenceRow}
+      `;
+      $tooltip.style.opacity = 1;
+      const wrapRect = $chartWrap.getBoundingClientRect();
+      const px = (x(i) / W) * wrapRect.width;
+      const py = (y(d.total) / H) * wrapRect.height;
+      let left = px + 14;
+      if (left + 180 > wrapRect.width) left = px - 194;
+      $tooltip.style.left = left + 'px';
+      $tooltip.style.top = Math.max(0, py - 60) + 'px';
+    }
+
+    function hide() {
+      hoverLine.style.opacity = 0;
+      dotPrincipal.style.opacity = 0;
+      dotTotal.style.opacity = 0;
+      $tooltip.style.opacity = 0;
+    }
+
+    overlay.addEventListener('mousemove', (e) => {
+      const rect = svg.getBoundingClientRect();
+      const relX = ((e.clientX - rect.left) / rect.width) * W;
+      const idx = Math.round(((relX - margin.left) / plotW) * (n - 1));
+      showAt(Math.min(n - 1, Math.max(0, idx)));
+    });
+    overlay.addEventListener('mouseleave', hide);
+    overlay.addEventListener('touchmove', (e) => {
+      const touch = e.touches[0];
+      const rect = svg.getBoundingClientRect();
+      const relX = ((touch.clientX - rect.left) / rect.width) * W;
+      const idx = Math.round(((relX - margin.left) / plotW) * (n - 1));
+      showAt(Math.min(n - 1, Math.max(0, idx)));
+    }, { passive: true });
+  }
+
+  let stages = [{ contrib: 150000, years: 2 }];
+
+  function updateAgeRangeLabels() {
+    const currentAge = Math.min(94, Math.max(0, parseInt($currentAge.value, 10) || 0));
+    let cumMonths = 0;
+    const spans = $stageList.querySelectorAll('.stage-age-range');
+    stages.forEach((stage, idx) => {
+      const startAge = currentAge + cumMonths / 12;
+      cumMonths += stage.years * 12;
+      const endAge = currentAge + cumMonths / 12;
+      if (spans[idx]) spans[idx].textContent = `${Math.round(startAge)}歳 〜 ${Math.round(endAge)}歳`;
+    });
+  }
+
+  function renderStageRows() {
+    $stageList.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    stages.forEach((stage, idx) => {
+      const row = document.createElement('div');
+      row.className = 'stage-row';
+      row.innerHTML = `
+        <div class="stage-row-label">ステージ${idx + 1}<span class="stage-age-range"></span></div>
+        <div class="stage-row-fields">
+          <div class="field">
+            <label>積立額</label>
+            <div class="input-row"><span class="prefix">¥</span><input type="number" class="stage-contrib" value="${stage.contrib}" min="0" step="1000"></div>
+          </div>
+          <div class="field">
+            <label>期間</label>
+            <div class="input-row"><input type="number" class="stage-years" value="${stage.years}" min="1" max="60" step="1"><span class="prefix">年</span></div>
+          </div>
+          <button type="button" class="stage-remove" ${stages.length <= 1 ? 'disabled' : ''} title="このステージを削除">✕</button>
+        </div>
+      `;
+      const $contribInput = row.querySelector('.stage-contrib');
+      const $yearsInput = row.querySelector('.stage-years');
+      const $removeBtn = row.querySelector('.stage-remove');
+      $contribInput.addEventListener('input', () => {
+        stages[idx].contrib = Math.max(0, parseFloat($contribInput.value) || 0);
+        update();
+      });
+      $yearsInput.addEventListener('input', () => {
+        stages[idx].years = Math.max(1, parseInt($yearsInput.value, 10) || 1);
+        updateAgeRangeLabels();
+        update();
+      });
+      $removeBtn.addEventListener('click', () => {
+        if (stages.length <= 1) return;
+        stages.splice(idx, 1);
+        renderStageRows();
+        update();
+      });
+      frag.appendChild(row);
+    });
+    $stageList.appendChild(frag);
+    updateAgeRangeLabels();
+  }
+
+  $addStage.addEventListener('click', () => {
+    const last = stages[stages.length - 1];
+    stages.push({ contrib: last ? last.contrib : 100000, years: 1 });
+    renderStageRows();
+    update();
+  });
+
+  let expenses = [];
+
+  function renderExpenseRows() {
+    $expenseList.innerHTML = '';
+    if (expenses.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'note';
+      empty.style.margin = '0';
+      empty.textContent = '想定外の支出はまだ登録されていません。';
+      $expenseList.appendChild(empty);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    expenses.forEach((exp, idx) => {
+      const row = document.createElement('div');
+      row.className = 'stage-row';
+      row.innerHTML = `
+        <div class="stage-row-label">支出${idx + 1}<span class="stage-warn"></span></div>
+        <div class="stage-row-fields">
+          <div class="field">
+            <label>金額</label>
+            <div class="input-row"><span class="prefix">¥</span><input type="number" class="expense-amount" value="${exp.amount}" min="0" step="10000"></div>
+          </div>
+          <div class="field">
+            <label>発生年齢</label>
+            <div class="input-row"><input type="number" class="expense-age" value="${exp.age}" min="0" max="99" step="1"><span class="prefix">歳</span></div>
+          </div>
+          <button type="button" class="stage-remove" title="この支出を削除">✕</button>
+        </div>
+      `;
+      const $amountInput = row.querySelector('.expense-amount');
+      const $ageInput = row.querySelector('.expense-age');
+      const $removeBtn = row.querySelector('.stage-remove');
+      $amountInput.addEventListener('input', () => {
+        expenses[idx].amount = Math.max(0, parseFloat($amountInput.value) || 0);
+        update();
+      });
+      $ageInput.addEventListener('input', () => {
+        expenses[idx].age = Math.max(0, parseInt($ageInput.value, 10) || 0);
+        update();
+      });
+      $removeBtn.addEventListener('click', () => {
+        expenses.splice(idx, 1);
+        renderExpenseRows();
+        update();
+      });
+      frag.appendChild(row);
+    });
+    $expenseList.appendChild(frag);
+  }
+
+  function updateExpenseWarnings(currentAge, lastMonth) {
+    const warnEls = $expenseList.querySelectorAll('.stage-warn');
+    expenses.forEach((exp, idx) => {
+      if (!warnEls[idx]) return;
+      const monthIdx = Math.round((exp.age - currentAge) * 12);
+      warnEls[idx].textContent = (monthIdx < 0 || monthIdx > lastMonth) ? '（期間外のため未反映）' : '';
+    });
+  }
+
+  $addExpense.addEventListener('click', () => {
+    const currentAge = Math.min(94, Math.max(0, parseInt($currentAge.value, 10) || 0));
+    expenses.push({ amount: 500000, age: Math.min(95, currentAge + 5) });
+    renderExpenseRows();
+    update();
+  });
+
+  function update() {
+    const initial = Math.max(0, parseFloat($initial.value) || 0);
+    const rate = Math.max(0, parseFloat($rate.value) || 0);
+    const currentAge = Math.min(94, Math.max(0, parseInt($currentAge.value, 10) || 0));
+    const withdraw = Math.max(0, parseFloat($withdraw.value) || 0);
+    $currentAge.value = currentAge;
+
+    const { data, ...meta } = computeFullSeries(initial, stages, rate, currentAge, withdraw, expenses);
+    renderStats(data, initial, stages, meta, currentAge);
+    renderChart(data, meta);
+    renderTable(data, meta);
+    updateExpenseWarnings(currentAge, data[data.length - 1].month);
+  }
+
+  $initial.addEventListener('input', update);
+  $rate.addEventListener('input', update);
+  $currentAge.addEventListener('input', () => { updateAgeRangeLabels(); update(); });
+  $withdraw.addEventListener('input', update);
+  $toggleTable.addEventListener('click', () => {
+    const open = $tableScroll.classList.toggle('open');
+    $toggleTable.textContent = open ? '表を隠す' : '表を表示';
+  });
+  window.addEventListener('resize', () => renderChart(currentData, currentMeta));
+
+  renderStageRows();
+  renderExpenseRows();
+  update();
+})();
+</script>
